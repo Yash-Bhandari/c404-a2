@@ -20,6 +20,7 @@
 
 import sys
 import socket
+import select
 import re
 # you may use urllib to encode data appropriately
 import urllib.parse
@@ -41,6 +42,7 @@ class HTTPClient(object):
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
+        # self.socket.setblocking(False)
 
     def get_code(self, data):
         first_line = data.split('\r\n')[0]
@@ -59,7 +61,7 @@ class HTTPClient(object):
         self.socket.close()
 
     # read everything from the socket
-    def recvall(self, sock):
+    def recvall(self, sock: socket.socket):
         buffer = bytearray()
         done = False
         while not done:
@@ -67,13 +69,20 @@ class HTTPClient(object):
             if (part):
                 buffer.extend(part)
             else:
-                done = not part
+                done = True
         return buffer.decode('utf-8')
+        # while not done:
+        #     try:
+        #         part = sock.recv(1024)
+        #         buffer.extend(part)
+        #     except BlockingIOError:
+        #         done = True
 
     def GET(self, url, args=None):
         host, port, path = utils.parse_url(url)
         request = f"GET {path} HTTP/1.1\r\n"
         request += f"Host: {host}\r\n"
+        request += "Connection: close\r\n"
         request += '\r\n'
 
         self.connect(host, port)
@@ -93,6 +102,7 @@ class HTTPClient(object):
             body = urllib.parse.urlencode(args)
             request += f"Content-Length: {len(body)}\r\n"
             request += "Content-Type: application/x-www-form-urlencoded\r\n"
+            request += "Connection: close\r\n"
             request += '\r\n'
             request += body
         else:
