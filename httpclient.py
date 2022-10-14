@@ -23,6 +23,7 @@ import socket
 import re
 # you may use urllib to encode data appropriately
 import urllib.parse
+import utils
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -32,22 +33,24 @@ class HTTPResponse(object):
         self.code = code
         self.body = body
 
+
 class HTTPClient(object):
-    #def get_host_port(self,url):
+    def get_host_port(self,url):
+        return url.split('/')
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
-        return None
 
     def get_code(self, data):
-        return None
+        first_line = data.split('\r\n')[0]
+        return int(first_line.split()[1])
 
     def get_headers(self,data):
-        return None
+        pass
 
     def get_body(self, data):
-        return None
+        return data[data.find('\r\n\r\n') + 4:]
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -68,13 +71,42 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
+        host, port, path = utils.parse_url(url)
+        request = f"GET {path} HTTP/1.1\r\n"
+        request += f"Host: {host}\r\n"
+        request += '\r\n'
+
+        self.connect(host, port)
+        self.sendall(request)
+        resp = self.recvall(self.socket)
+        self.close()
+        print(resp)
+        code = self.get_code(resp)
+        body = resp 
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
+        host, port, path = utils.parse_url(url)
+        request = f"POST {path} HTTP/1.1\r\n"
+        request += f"Host: {host}\r\n"
+        if args is not None:
+            body = urllib.parse.urlencode(args)
+            request += f"Content-Length: {len(body)}\r\n"
+            request += "Content-Type: application/x-www-form-urlencoded\r\n"
+            request += '\r\n'
+            request += body
+        else:
+            request += f"Content-Length: 0\r\n"
+            request += '\r\n'
+
+        self.connect(host, port)
+        self.sendall(request)
+        resp = self.recvall(self.socket)
+        self.close()
+        print("---Response----\n", resp, "---End Response---", sep='')
+        code = self.get_code(resp)
+        # body is everything after the first blank line in resp
+        body = self.get_body(resp)
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
